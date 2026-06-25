@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ready Agent Monitor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    background: #1a1d27;
+    border-bottom: 1px solid #2d3148;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+  .brand span { color: #4ade80; }
+  .live-pill {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: #94a3b8;
+    background: #252839; border-radius: 20px; padding: 3px 10px;
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+  .live-dot.off { background: #475569; animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ts-lbl { font-size: 11px; color: #475569; }
+
+  select, button {
+    font-size: 12px; padding: 5px 11px;
+    border-radius: 6px; border: 1px solid #2d3148;
+    background: #252839; color: #e2e8f0; cursor: pointer;
+  }
+  button:hover { background: #2d3148; }
+
+  /* ALERT FLASH BANNER */
+  #alert-banner {
+    display: none;
+    background: #7f1d1d;
+    border-bottom: 2px solid #ef4444;
+    padding: 11px 16px;
+    font-size: 13px; font-weight: 600; color: #fecaca;
+    align-items: center; gap: 10px;
+    animation: flashbg 1.2s infinite alternate;
+  }
+  #alert-banner.show { display: flex; }
+  @keyframes flashbg { from{background:#7f1d1d} to{background:#991b1b} }
+
+  /* STATS */
+  .stat-row {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; padding: 12px 16px 0;
+  }
+  .stat-card {
+    background: #1a1d27; border: 1px solid #2d3148;
+    border-radius: 8px; padding: 10px 14px;
+  }
+  .stat-card .lbl { font-size: 11px; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .val { font-size: 26px; font-weight: 700; }
+  .val-ready { color: #4ade80; }
+  .val-alert { color: #f87171; }
+  .val-total { color: #e2e8f0; }
+
+  /* TABLE */
+  .section-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 8px; flex-wrap: wrap; gap: 8px;
+  }
+  .section-hdr .title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.6px; }
+
+  .tbl-wrap { padding: 0 16px 16px; }
+  table {
+    width: 100%; border-collapse: collapse; table-layout: fixed;
+    background: #1a1d27; border: 1px solid #2d3148; border-radius: 8px; overflow: hidden;
+  }
+  thead th {
+    background: #20243a; padding: 8px 12px;
+    text-align: left; font-size: 11px; font-weight: 700;
+    color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #2d3148;
+  }
+  tbody tr { border-bottom: 1px solid #1e2235; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #20243a; }
+  tbody tr.row-alert {
+    background: #1c1010;
+    border-left: 3px solid #ef4444;
+    animation: rowpulse 2s infinite alternate;
+  }
+  @keyframes rowpulse { from{background:#1c1010} to{background:#1f1212} }
+  tbody tr.row-waiting { background: #111a0f; border-left: 3px solid #4ade80; }
+
+  td { padding: 9px 12px; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.name-cell { color: #f1f5f9; font-weight: 600; }
+
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px; letter-spacing: 0.3px;
+  }
+  .b-ready    { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+  .b-alert    { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; animation: badge-pulse 1.4s infinite; }
+  .b-ok       { color: #334155; font-size: 12px; }
+  @keyframes badge-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .timer-bar-wrap { width: 100%; background: #252839; border-radius: 3px; height: 5px; margin-top: 3px; overflow: hidden; }
+  .timer-bar { height: 5px; border-radius: 3px; transition: width 0.5s, background 0.5s; }
+
+  /* LOG */
+  .log-wrap { padding: 0 16px 24px; }
+  .log-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+  .log-empty { font-size: 12px; color: #334155; }
+  .log-entry {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 7px 12px; border-radius: 6px; margin-bottom: 5px; font-size: 12px;
+  }
+  .log-alert  { background: #1c1010; border: 1px solid #7f1d1d; }
+  .log-ok     { background: #052e16; border: 1px solid #14532d; }
+  .log-msg-a  { color: #fca5a5; flex: 1; line-height: 1.4; }
+  .log-msg-o  { color: #86efac; flex: 1; line-height: 1.4; }
+  .log-time   { font-size: 10px; color: #475569; white-space: nowrap; margin-top: 2px; }
+
+  /* CONFIG */
+  .config-bar {
+    padding: 8px 16px 10px; display: flex; align-items: center; gap: 12px;
+    flex-wrap: wrap; border-bottom: 1px solid #1e2235; margin-bottom: 4px;
+  }
+  .config-bar label { font-size: 11px; color: #64748b; }
+  .excl-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #252839; border: 1px solid #2d3148;
+    border-radius: 4px; padding: 2px 8px; font-size: 11px; color: #94a3b8;
+  }
+  .excl-tag button { border:none; background:none; color:#ef4444; padding:0; font-size:13px; cursor:pointer; }
+  #excl-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  input[type=text] {
+    font-size: 12px; padding: 4px 8px; border-radius: 5px;
+    border: 1px solid #2d3148; background: #252839; color: #e2e8f0; width: 170px;
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="brand">Ready<span>Watch</span></div>
+    <div class="live-pill">
+      <span class="live-dot" id="live-dot"></span>
+      <span id="live-lbl">Live</span>
+    </div>
+    <span class="ts-lbl" id="ts-lbl">—</span>
+  </div>
+  <div class="topbar-right">
+    <label style="font-size:11px;color:#64748b;">Alert after</label>
+    <select id="thresh-sel" onchange="onThreshChange(this.value)">
+      <option value="60">1 min</option>
+      <option value="120" selected>2 min</option>
+      <option value="180">3 min</option>
+      <option value="300">5 min</option>
+    </select>
+    <button onclick="toggleMonitor()" id="tog-btn">⏸ Pause</button>
+    <button onclick="clearLog()" style="border-color:#7f1d1d;color:#fca5a5;">✕ Clear log</button>
+  </div>
+</div>
+
+<!-- ALERT BANNER -->
+<div id="alert-banner">
+  <span style="font-size:16px;">🔔</span>
+  <span id="alert-text"></span>
+</div>
+
+<!-- EXCLUDED CAMPAIGNS -->
+<div class="config-bar">
+  <label>Excluded campaigns:</label>
+  <div id="excl-tags"></div>
+  <input type="text" id="excl-input" placeholder="e.g. TESTLIVE" onkeydown="if(event.key==='Enter')addExcl()">
+  <button onclick="addExcl()" style="padding:4px 10px;">+ Add</button>
+</div>
+
+<!-- STATS -->
+<div class="stat-row">
+  <div class="stat-card">
+    <div class="lbl">Ready agents</div>
+    <div class="val val-ready" id="s-ready">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="lbl">Idle &gt; threshold</div>
+    <div class="val val-alert" id="s-alert">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="lbl">Excluded (SUPPORT)</div>
+    <div class="val val-total" id="s-excl">—</div>
+  </div>
+</div>
+
+<!-- TABLE -->
+<div class="section-hdr">
+  <span class="title">Agents in READY / QUEUE status</span>
+  <span style="font-size:11px;color:#475569;">Only ready agents shown — all other statuses hidden</span>
+</div>
+<div class="tbl-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%;">Agent</th>
+        <th style="width:24%;">Waiting time</th>
+        <th style="width:22%;">Campaign</th>
+        <th style="width:28%;">Alert</th>
+      </tr>
+    </thead>
+    <tbody id="agent-tbody"></tbody>
+  </table>
+</div>
+
+<!-- LOG -->
+<div class="log-wrap">
+  <div class="log-title">Notification log</div>
+  <div id="log-list"></div>
+  <div class="log-empty" id="log-empty">No alerts yet.</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────
+let THRESHOLD = 120;
+let EXCLUDED  = ["SUPPORT"];
+let running   = true;
+
+// ─────────────────────────────────────────
+//  AGENT DATA  — only QUEUE/READY status
+//  Replace with API fetch for live data
+// ─────────────────────────────────────────
+const agents = [
+  { name: "Isha Arora",     campaign: "HMAMDOFF", waitSec: 75  },
+  { name: "Jitu Brahma",    campaign: "HITOUCH",  waitSec: 39  },
+  { name: "Sakshi Mishra",  campaign: "HITOUCH",  waitSec: 87  },
+  { name: "Demo Agent A",   campaign: "SUPPORT",  waitSec: 145 },
+  { name: "Demo Agent B",   campaign: "HMAMDOFF", waitSec: 10  },
+];
+
+// ─────────────────────────────────────────
+//  LIVE API  — uncomment to go live
+// ─────────────────────────────────────────
+/*
+const VICI_URL  = '/vicidial/non_agent_api.php';
+const VICI_USER = 'YOUR_API_USER';
+const VICI_PASS = 'YOUR_API_PASS';
+
+async function fetchAgents() {
+  try {
+    const url = `${VICI_URL}?source=test&user=${VICI_USER}&pass=${VICI_PASS}&function=agent_status&campaign_id=ALL_ACTIVE&FORMAT=csv`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    // Filter rows where status === 'QUEUE' or 'READY'
+    // Parse MM:SS from the time column into seconds
+    // Update agents[] array here
+  } catch(e) { console.warn('API error:', e); }
+}
+*/
+
+// ─────────────────────────────────────────
+//  SOUND
+// ─────────────────────────────────────────
+let audioCtx = null;
+function playAlert() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    [880, 660, 880].forEach((f, i) => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.type = 'sine'; o.frequency.value = f;
+      const t = audioCtx.currentTime + i * 0.18;
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      o.start(t); o.stop(t + 0.18);
+    });
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────
+//  LOGIC
+// ─────────────────────────────────────────
+const notified   = new Set();
+const logEntries = [];
+
+const isExcl = a => EXCLUDED.includes(a.campaign.toUpperCase());
+const isIdle = a => !isExcl(a) && a.waitSec >= THRESHOLD;
+
+function fmtSec(s) {
+  if (s <= 0) return "0s";
+  const m = Math.floor(s/60), sec = s%60;
+  return m ? `${m}m ${String(sec).padStart(2,'0')}s` : `${sec}s`;
+}
+
+function nowStr() {
+  return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function addLog(msg, type) {
+  logEntries.unshift({ msg, t: nowStr(), type });
+  if (logEntries.length > 20) logEntries.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const list  = document.getElementById('log-list');
+  const empty = document.getElementById('log-empty');
+  if (!logEntries.length) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  list.innerHTML = logEntries.map(e => `
+    <div class="log-entry ${e.type==='ok'?'log-ok':'log-alert'}">
+      <span>${e.type==='ok'?'✔':'⚠'}</span>
+      <span class="${e.type==='ok'?'log-msg-o':'log-msg-a'}">${e.msg}</span>
+      <span class="log-time">${e.t}</span>
+    </div>`).join('');
+}
+
+function timerBar(waitSec) {
+  const pct = Math.min(100, Math.round((waitSec / THRESHOLD) * 100));
+  const col = pct >= 100 ? '#ef4444' : pct >= 60 ? '#f59e0b' : '#4ade80';
+  return `<div class="timer-bar-wrap"><div class="timer-bar" style="width:${pct}%;background:${col};"></div></div>`;
+}
+
+function renderTable() {
+  const tbody       = document.getElementById('agent-tbody');
+  const alertNames  = [];
+  const currentAlerts = new Set();
+
+  const ready = agents.filter(a => !isExcl(a));
+  const excld = agents.filter(isExcl);
+
+  if (!ready.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#334155;padding:20px;">No agents in READY status</td></tr>`;
+  } else {
+    tbody.innerHTML = ready.map(a => {
+      const idle = isIdle(a);
+      if (idle) { alertNames.push(a.name); currentAlerts.add(a.name); }
+
+      const rowCls  = idle ? 'row-alert' : 'row-waiting';
+      const timeCol = `<span style="color:${idle?'#f87171':'#4ade80'};font-weight:700;">${fmtSec(a.waitSec)}</span>${timerBar(a.waitSec)}`;
+      const alertCol = idle
+        ? `<span class="badge b-alert">🔔 No call for ${fmtSec(a.waitSec)}</span>`
+        : `<span style="color:#334155;font-size:12px;">Waiting normally</span>`;
+
+      return `<tr class="${rowCls}">
+        <td class="name-cell">${a.name}</td>
+        <td>${timeCol}</td>
+        <td style="color:#94a3b8;">${a.campaign}</td>
+        <td>${alertCol}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // stats
+  document.getElementById('s-ready').textContent = ready.length;
+  document.getElementById('s-alert').textContent = alertNames.length;
+  document.getElementById('s-excl').textContent  = excld.length;
+
+  // banner
+  const banner = document.getElementById('alert-banner');
+  if (alertNames.length) {
+    banner.classList.add('show');
+    document.getElementById('alert-text').textContent =
+      `${alertNames.length} agent${alertNames.length>1?'s':''} in READY with no call for over ${Math.round(THRESHOLD/60)} min: ${alertNames.join(', ')}`;
+  } else {
+    banner.classList.remove('show');
+  }
+
+  // sound + log
+  alertNames.forEach(name => {
+    if (!notified.has(name)) {
+      notified.add(name);
+      playAlert();
+      addLog(`${name} has been READY for over ${Math.round(THRESHOLD/60)} min — no call assigned`, 'alert');
+    }
+  });
+  notified.forEach(name => {
+    if (!currentAlerts.has(name)) {
+      notified.delete(name);
+      addLog(`${name} — resolved (call assigned or status changed)`, 'ok');
+    }
+  });
+
+  document.getElementById('ts-lbl').textContent = `Updated ${nowStr()}`;
+}
+
+function tick() {
+  if (!running) return;
+  // await fetchAgents(); // ← uncomment for live data
+  agents.forEach(a => { if (!isExcl(a)) a.waitSec += 10; });
+  renderTable();
+}
+
+function toggleMonitor() {
+  running = !running;
+  document.getElementById('tog-btn').textContent  = running ? '⏸ Pause' : '▶ Resume';
+  document.getElementById('live-dot').className   = running ? 'live-dot' : 'live-dot off';
+  document.getElementById('live-lbl').textContent = running ? 'Live' : 'Paused';
+}
+
+function onThreshChange(val) {
+  THRESHOLD = parseInt(val);
+  notified.clear();
+  renderTable();
+}
+
+function clearLog() { logEntries.length = 0; renderLog(); }
+
+function renderExclTags() {
+  document.getElementById('excl-tags').innerHTML = EXCLUDED.map(c => `
+    <span class="excl-tag">${c}
+      <button onclick="removeExcl('${c}')">✕</button>
+    </span>`).join('');
+}
+
+function addExcl() {
+  const inp = document.getElementById('excl-input');
+  const val = inp.value.trim().toUpperCase();
+  if (val && !EXCLUDED.includes(val)) { EXCLUDED.push(val); renderExclTags(); renderTable(); }
+  inp.value = '';
+}
+
+function removeExcl(c) {
+  EXCLUDED = EXCLUDED.filter(x => x !== c);
+  renderExclTags();
+  renderTable();
+}
+
+renderExclTags();
+renderTable();
+setInterval(tick, 10000);
+</script>
+</body>
+</html>
